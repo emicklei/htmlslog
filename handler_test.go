@@ -15,6 +15,7 @@ func TestHandle(t *testing.T) {
 	l.Debug("test", "attr", "values")
 	l.Info("info", "attr", "values")
 	l.Error("error", "err", errors.New("test error"), "why", "because")
+	l.Info("info", "html", "<a href=\"http://example.com\">html not allowed</a>")
 
 	o, _ := os.Create("handler_test.html")
 	io.WriteString(o, h.Close())

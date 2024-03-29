@@ -3,10 +3,14 @@ package htmlslog
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"fmt"
+	"html"
 	"log/slog"
+	"strings"
 )
 
+// TODO add io.Writer
 type Options struct {
 	Title string
 	Level slog.Level
@@ -14,6 +18,7 @@ type Options struct {
 
 type Handler struct {
 	buf     *bytes.Buffer
+	odd     bool // for highlighting rows
 	attrs   []slog.Attr
 	options Options
 }
@@ -43,26 +48,15 @@ func New(options Options) *Handler {
 	h.beginHTML()
 	return h
 }
+
+//go:embed prolog.html
+var prolog string
+
 func (h *Handler) beginHTML() {
-	h.buf.WriteString(`
-	<!DOCTYPE html>
-	<head><title>Log</title></head>
-	<style>
-	body {
-		font-family: "Open Sans", Tahoma, Geneva, sans-serif;
-		-webkit-font-smoothing: antialiased;
-		-moz-osx-font-smoothing: grayscale;
-	}	
-	</style>
-	<html><body>
-		<table>
-		<tr>
-			<th>Time</th>	
-			<th>Level</th>
-			<th>Message</th>
-			<th>Attrs</th>
-		</tr>
-`)
+	if h.options.Title != "" {
+		prolog = strings.ReplaceAll(prolog, "TITLE", h.options.Title)
+	}
+	h.buf.WriteString(prolog)
 }
 func (h *Handler) Close() string {
 	h.endHTML()
@@ -75,7 +69,12 @@ func (h *Handler) Enabled(ctx context.Context, l slog.Level) bool {
 	return h.options.Level <= l
 }
 func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
-	h.buf.WriteString("<tr>")
+	if h.odd {
+		h.buf.WriteString("<tr class=\"odd\">")
+	} else {
+		h.buf.WriteString("<tr>")
+	}
+	h.odd = !h.odd
 
 	h.buf.WriteString("<td>")
 	h.buf.WriteString(rec.Time.Format("2006-01-02 15:04:05"))
@@ -105,6 +104,15 @@ func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
 func (h *Handler) writeAttr(key string, value any) {
 	h.buf.WriteString(key)
 	h.buf.WriteString("=<b>")
-	fmt.Fprintf(h.buf, "%v", value)
+	var valueString string
+	switch value.(type) {
+	case string:
+		valueString = value.(string)
+	case error:
+		valueString = value.(error).Error()
+	default:
+		valueString = fmt.Sprintf("%v", value)
+	}
+	fmt.Fprintf(h.buf, "%v", html.EscapeString(valueString))
 	h.buf.WriteString("</b> ")
 }
