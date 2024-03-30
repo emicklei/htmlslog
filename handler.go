@@ -8,10 +8,12 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"time"
 )
 
 type Options struct {
 	Title              string
+	TimeLayout         string
 	Level              slog.Level
 	TableOnly          bool         // if true then only the table and its rows are written
 	PassthroughHandler slog.Handler // if set then also handle events by this handler
@@ -42,6 +44,12 @@ func (h *Handler) WithGroup(name string) slog.Handler {
 }
 
 func New(w io.Writer, options Options) *Handler {
+	if options.TimeLayout == "" {
+		options.TimeLayout = time.RFC3339
+	}
+	if options.Level == 0 {
+		options.Level = slog.LevelInfo
+	}
 	h := &Handler{options: options, writer: w}
 	h.beginHTML()
 	return h
@@ -67,7 +75,7 @@ func (h *Handler) beginTable() {
 	<th>Time</th>
 	<th>Level</th>
 	<th>Message</th>
-	<th>Log Attributes</th>
+	<th>Attributes</th>
 </tr>
 `)
 }
@@ -101,7 +109,7 @@ func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
 	h.odd = !h.odd
 
 	fmt.Fprint(h.writer, "\t<td>")
-	fmt.Fprint(h.writer, rec.Time.Format("2006-01-02 15:04:05"))
+	fmt.Fprint(h.writer, rec.Time.Format(h.options.TimeLayout))
 	fmt.Fprint(h.writer, "</td>\n")
 
 	fmt.Fprint(h.writer, "\t<td>")
