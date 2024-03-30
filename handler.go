@@ -1,23 +1,23 @@
 package htmlslog
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"strings"
 )
 
-// TODO add io.Writer
 type Options struct {
-	Title string
-	Level slog.Level
+	Title              string
+	Level              slog.Level
+	PassthroughHandler slog.Handler // if set then also handle events by this handler
 }
 
 type Handler struct {
-	buf     *bytes.Buffer
+	writer  io.Writer
 	odd     bool // for highlighting rows
 	attrs   []slog.Attr
 	options Options
@@ -40,11 +40,8 @@ func (h *Handler) WithGroup(name string) slog.Handler {
 	return h
 }
 
-func New(options Options) *Handler {
-	h := &Handler{
-		buf:     new(bytes.Buffer),
-		options: options,
-	}
+func New(w io.Writer, options Options) *Handler {
+	h := &Handler{options: options, writer: w}
 	h.beginHTML()
 	return h
 }
@@ -56,39 +53,45 @@ func (h *Handler) beginHTML() {
 	if h.options.Title != "" {
 		prolog = strings.ReplaceAll(prolog, "TITLE", h.options.Title)
 	}
-	h.buf.WriteString(prolog)
+	fmt.Fprint(h.writer, prolog)
+	fmt.Fprint(h.writer, "\n")
 }
-func (h *Handler) Close() string {
+
+// Close write the ending HTML and return the result.
+func (h *Handler) Close() {
 	h.endHTML()
-	return h.buf.String()
 }
 func (h *Handler) endHTML() {
-	h.buf.WriteString("</table></body></html>")
+	fmt.Fprint(h.writer, "</table></body></html>")
 }
+
+// Enabled implements slog.Handler.
 func (h *Handler) Enabled(ctx context.Context, l slog.Level) bool {
 	return h.options.Level <= l
 }
+
+// Handle implements slog.Handler.
 func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
 	if h.odd {
-		h.buf.WriteString("<tr class=\"odd\">")
+		fmt.Fprint(h.writer, "<tr class=\"odd\">")
 	} else {
-		h.buf.WriteString("<tr>")
+		fmt.Fprint(h.writer, "<tr>")
 	}
 	h.odd = !h.odd
 
-	h.buf.WriteString("<td>")
-	h.buf.WriteString(rec.Time.Format("2006-01-02 15:04:05"))
-	h.buf.WriteString("</td>")
+	fmt.Fprint(h.writer, "<td>")
+	fmt.Fprint(h.writer, rec.Time.Format("2006-01-02 15:04:05"))
+	fmt.Fprint(h.writer, "</td>")
 
-	h.buf.WriteString("<td>")
-	h.buf.WriteString(rec.Level.String())
-	h.buf.WriteString("</td>")
+	fmt.Fprint(h.writer, "<td>")
+	fmt.Fprint(h.writer, rec.Level.String())
+	fmt.Fprint(h.writer, "</td>")
 
-	h.buf.WriteString("<td>")
-	h.buf.WriteString(rec.Message)
-	h.buf.WriteString("</td>")
+	fmt.Fprint(h.writer, "<td>")
+	fmt.Fprint(h.writer, rec.Message)
+	fmt.Fprint(h.writer, "</td>")
 
-	h.buf.WriteString("<td>")
+	fmt.Fprint(h.writer, "<td>")
 	for _, a := range h.attrs {
 		h.writeAttr(a.Key, a.Value)
 	}
@@ -96,14 +99,18 @@ func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
 		h.writeAttr(a.Key, a.Value)
 		return true
 	})
-	h.buf.WriteString("</td>")
+	fmt.Fprint(h.writer, "</td>")
 
-	h.buf.WriteString("</tr>")
+	fmt.Fprint(h.writer, "</tr>\n")
+
+	if h.options.PassthroughHandler != nil {
+		return h.options.PassthroughHandler.Handle(ctx, rec)
+	}
 	return nil
 }
 func (h *Handler) writeAttr(key string, value any) {
-	h.buf.WriteString(key)
-	h.buf.WriteString("=<b>")
+	fmt.Fprint(h.writer, key)
+	fmt.Fprint(h.writer, "=<b>")
 	var valueString string
 	switch value.(type) {
 	case string:
@@ -113,6 +120,6 @@ func (h *Handler) writeAttr(key string, value any) {
 	default:
 		valueString = fmt.Sprintf("%v", value)
 	}
-	fmt.Fprintf(h.buf, "%v", html.EscapeString(valueString))
-	h.buf.WriteString("</b> ")
+	fmt.Fprintf(h.writer, "%v", html.EscapeString(valueString))
+	fmt.Fprint(h.writer, "</b> ")
 }
