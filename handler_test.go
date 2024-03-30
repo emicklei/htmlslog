@@ -21,3 +21,16 @@ func TestHandle(t *testing.T) {
 	l.Error("error", "err", errors.New("test error"), "why", "because")
 	l.Info("info", "html", "<a href=\"http://example.com\">html not allowed</a>")
 }
+func TestHandleTableOnly(t *testing.T) {
+	o, _ := os.Create("handler_table.html")
+	defer o.Close()
+
+	h := New(o, Options{Level: slog.LevelDebug, TableOnly: true})
+	defer h.Close()
+
+	base := slog.New(h)
+	l := base.With("ctx", "summer")
+	l.Debug("test", "attr", "values")
+	l.Info("info", "attr", "values")
+	l.Error("error", "err", errors.New("test error"), "why", "because")
+}

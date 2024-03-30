@@ -13,6 +13,7 @@ import (
 type Options struct {
 	Title              string
 	Level              slog.Level
+	TableOnly          bool         // if true then only the table and its rows are written
 	PassthroughHandler slog.Handler // if set then also handle events by this handler
 }
 
@@ -50,19 +51,39 @@ func New(w io.Writer, options Options) *Handler {
 var prolog string
 
 func (h *Handler) beginHTML() {
-	if h.options.Title != "" {
-		prolog = strings.ReplaceAll(prolog, "TITLE", h.options.Title)
+	if !h.options.TableOnly {
+		if h.options.Title != "" {
+			prolog = strings.ReplaceAll(prolog, "TITLE", h.options.Title)
+		}
+		fmt.Fprint(h.writer, prolog)
+		fmt.Fprint(h.writer, "\n")
 	}
-	fmt.Fprint(h.writer, prolog)
-	fmt.Fprint(h.writer, "\n")
+	h.beginTable()
+}
+
+func (h *Handler) beginTable() {
+	fmt.Fprint(h.writer, `<table>
+<tr>
+	<th>Time</th>
+	<th>Level</th>
+	<th>Message</th>
+	<th>Log Attributes</th>
+</tr>
+`)
 }
 
 // Close write the ending HTML and return the result.
 func (h *Handler) Close() {
 	h.endHTML()
 }
+func (h *Handler) endTable() {
+	fmt.Fprint(h.writer, "</table>")
+}
 func (h *Handler) endHTML() {
-	fmt.Fprint(h.writer, "</table></body></html>")
+	h.endTable()
+	if !h.options.TableOnly {
+		fmt.Fprint(h.writer, "</body></html>")
+	}
 }
 
 // Enabled implements slog.Handler.
@@ -73,25 +94,25 @@ func (h *Handler) Enabled(ctx context.Context, l slog.Level) bool {
 // Handle implements slog.Handler.
 func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
 	if h.odd {
-		fmt.Fprint(h.writer, "<tr class=\"odd\">")
+		fmt.Fprint(h.writer, "<tr class=\"odd\">\n")
 	} else {
-		fmt.Fprint(h.writer, "<tr>")
+		fmt.Fprint(h.writer, "<tr>\n")
 	}
 	h.odd = !h.odd
 
-	fmt.Fprint(h.writer, "<td>")
+	fmt.Fprint(h.writer, "\t<td>")
 	fmt.Fprint(h.writer, rec.Time.Format("2006-01-02 15:04:05"))
-	fmt.Fprint(h.writer, "</td>")
+	fmt.Fprint(h.writer, "</td>\n")
 
-	fmt.Fprint(h.writer, "<td>")
+	fmt.Fprint(h.writer, "\t<td>")
 	fmt.Fprint(h.writer, rec.Level.String())
-	fmt.Fprint(h.writer, "</td>")
+	fmt.Fprint(h.writer, "</td>\n")
 
-	fmt.Fprint(h.writer, "<td>")
+	fmt.Fprint(h.writer, "\t<td>")
 	fmt.Fprint(h.writer, rec.Message)
-	fmt.Fprint(h.writer, "</td>")
+	fmt.Fprint(h.writer, "</td>\n")
 
-	fmt.Fprint(h.writer, "<td>")
+	fmt.Fprint(h.writer, "\t<td>")
 	for _, a := range h.attrs {
 		h.writeAttr(a.Key, a.Value)
 	}
@@ -99,7 +120,7 @@ func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
 		h.writeAttr(a.Key, a.Value)
 		return true
 	})
-	fmt.Fprint(h.writer, "</td>")
+	fmt.Fprint(h.writer, "</td>\n")
 
 	fmt.Fprint(h.writer, "</tr>\n")
 
