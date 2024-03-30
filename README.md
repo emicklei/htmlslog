@@ -17,3 +17,4 @@ func main() {
 	handler.Close()
 }
 ```
+See https://goplay.tools/snippet/TaQ0B5ecFBX
