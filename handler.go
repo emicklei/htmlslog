@@ -29,6 +29,9 @@ type Handler struct {
 // WithAttrs implements slog.Handler.
 func (h *Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	h.attrs = append(h.attrs, attrs...)
+	if h.options.PassthroughHandler != nil {
+		h.options.PassthroughHandler = h.options.PassthroughHandler.WithAttrs(attrs)
+	}
 	return h
 }
 
@@ -40,6 +43,9 @@ func (h *Handler) WithLevel(level slog.Level) slog.Handler {
 
 // WithGroup implements slog.Handler.
 func (h *Handler) WithGroup(name string) slog.Handler {
+	if h.options.PassthroughHandler != nil {
+		h.options.PassthroughHandler = h.options.PassthroughHandler.WithGroup(name)
+	}
 	return h
 }
 
