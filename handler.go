@@ -28,25 +28,27 @@ type Handler struct {
 
 // WithAttrs implements slog.Handler.
 func (h *Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	h.attrs = append(h.attrs, attrs...)
+	newh := &Handler{options: h.options, writer: h.writer, attrs: append(h.attrs, attrs...)}
 	if h.options.PassthroughHandler != nil {
-		h.options.PassthroughHandler = h.options.PassthroughHandler.WithAttrs(attrs)
+		newh.options.PassthroughHandler = newh.options.PassthroughHandler.WithAttrs(attrs)
 	}
-	return h
+	return newh
 }
 
 // WithLevel implements slog.Handler.
 func (h *Handler) WithLevel(level slog.Level) slog.Handler {
-	h.options.Level = level
+	newh := &Handler{options: h.options, writer: h.writer, attrs: h.attrs}
+	newh.options.Level = level
 	return h
 }
 
 // WithGroup implements slog.Handler.
 func (h *Handler) WithGroup(name string) slog.Handler {
+	newh := &Handler{options: h.options, writer: h.writer, attrs: h.attrs}
 	if h.options.PassthroughHandler != nil {
-		h.options.PassthroughHandler = h.options.PassthroughHandler.WithGroup(name)
+		newh.options.PassthroughHandler = newh.options.PassthroughHandler.WithGroup(name)
 	}
-	return h
+	return newh
 }
 
 func New(w io.Writer, options Options) *Handler {
